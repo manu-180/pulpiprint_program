@@ -11,7 +11,7 @@ import '../../domain/category_model.dart';
 import '../../domain/product_variant.dart';
 import '../providers/product_providers.dart';
 import '../widgets/product_image_picker.dart';
-import '../widgets/category_management_dialog.dart'; // Importación del nuevo modal
+import '../widgets/category_management_dialog.dart';
 
 class ProductFormScreen extends ConsumerStatefulWidget {
   final int? productId;
@@ -42,14 +42,17 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   @override
   void initState() {
     super.initState();
-    if (widget.productId != null) _loadProductData();
+    if (widget.productId != null) {
+      // Usamos microtask para asegurar que los providers estén listos
+      Future.microtask(() => _loadProductData());
+    }
   }
 
-  void _loadProductData() async {
-    // Esperamos a que los productos estén cargados si es necesario
+  void _loadProductData() {
     final products = ref.read(productsProvider).valueOrNull ?? [];
     try {
       final product = products.firstWhere((p) => p.id == widget.productId);
+      
       _titleController.text = product.title;
       _descController.text = product.description ?? '';
       _priceController.text = product.price.toString();
@@ -60,15 +63,21 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
         _selectedImages = List.from(product.images);
         _isFeatured = product.isFeatured;
         
+        // Carga precisa de categorías (Principal y Subcategoría)
         if (product.categories.isNotEmpty) {
-          try {
-            _parentCat = product.categories.firstWhere((c) => c.parentId == null);
-            _subCat = product.categories.firstWhere((c) => c.parentId == _parentCat?.id);
-          } catch (_) {
-            _parentCat = product.categories.first;
+          final parents = product.categories.where((c) => c.parentId == null).toList();
+          if (parents.isNotEmpty) {
+            _parentCat = parents.first;
+            // Buscamos si hay una subcategoría que pertenezca a este padre
+            final subs = product.categories.where((c) => c.parentId == _parentCat?.id).toList();
+            if (subs.isNotEmpty) {
+              _subCat = subs.first;
+            }
           }
         }
 
+        // Carga de variantes existentes
+        _variantControllers.clear();
         for (var v in product.variants) {
           _variantControllers.add({
             'size': TextEditingController(text: v.sizeLabel),
@@ -76,7 +85,9 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
           });
         }
       });
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('Error cargando producto: $e');
+    }
   }
 
   @override

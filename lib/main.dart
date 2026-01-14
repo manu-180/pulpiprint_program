@@ -19,14 +19,14 @@ Future<void> main() async {
     anonKey: dotenv.env['SUPABASE_ANON_KEY'] ?? '',
   );
 
-  // 2. Inicializar Preferencias (Persistencia local)
+  // 2. Inicializar Preferencias
   final prefs = await SharedPreferences.getInstance();
 
   // 3. Configuración de Ventana
   await windowManager.ensureInitialized();
   WindowOptions windowOptions = const WindowOptions(
-    size: Size(1200, 800), 
-    minimumSize: Size(600, 600), 
+    size: Size(1100, 700), // Reducido de 1200x800 a 1100x700
+    minimumSize: Size(800, 600), // Ajustado el mínimo para evitar colapsos visuales
     center: true,
     title: 'PulpiPrint Manager',
   );
@@ -36,8 +36,7 @@ Future<void> main() async {
     await windowManager.focus();
   });
 
-  // 4. Inyección de Dependencias (Override)
-  // Aquí "sobreescribimos" el provider vacío con la instancia real de prefs
+  // 4. Inyección de Dependencias
   runApp(ProviderScope(
     overrides: [
       sharedPreferencesProvider.overrideWithValue(prefs),

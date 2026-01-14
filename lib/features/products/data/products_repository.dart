@@ -24,7 +24,6 @@ class ProductsRepository {
           .order('sort_order', ascending: true);
 
       return (response as List).map((json) {
-        // Mapeo manual de categorías anidadas si es necesario
         final List<Category> cats = [];
         if (json['product_categories'] != null) {
           for (var item in json['product_categories']) {
@@ -47,8 +46,6 @@ class ProductsRepository {
 
   Future<void> saveProduct(Product product) async {
     try {
-      // 1. Upsert del producto principal
-      // El método toJson() ya incluye la lista 'images' y excluye 'image_url'
       final productData = await _client
           .from('products_pulpiprint')
           .upsert(product.toJson())
@@ -57,13 +54,11 @@ class ProductsRepository {
 
       final int productId = productData['id'];
 
-      // 2. Limpieza de relaciones existentes si es una edición
       if (product.id != null) {
         await _client.from('product_variants').delete().eq('product_id', productId);
         await _client.from('product_categories').delete().eq('product_id', productId);
       }
 
-      // 3. Inserción de nuevas variantes
       if (product.variants.isNotEmpty) {
         await _client.from('product_variants').insert(
           product.variants.map((v) => {
@@ -74,7 +69,6 @@ class ProductsRepository {
         );
       }
 
-      // 4. Inserción de nuevas categorías
       if (product.categories.isNotEmpty) {
         await _client.from('product_categories').insert(
           product.categories.map((c) => {
@@ -112,15 +106,18 @@ class ProductsRepository {
   Future<String> uploadImage(XFile imageFile) async {
     try {
       final bytes = await imageFile.readAsBytes();
-      final fileExt = imageFile.path.split('.').last;
-      final fileName = '${DateTime.now().millisecondsSinceEpoch}.${fileExt}';
+      final fileExt = imageFile.path.split('.').last.toLowerCase();
+      final fileName = '${DateTime.now().millisecondsSinceEpoch}.$fileExt';
       final filePath = 'uploads/$fileName';
+
+      // Configuración de MimeType básica
+      final String contentType = fileExt == 'png' ? 'image/png' : 'image/jpeg';
 
       await _client.storage.from('product_images').uploadBinary(
         filePath,
         bytes,
         fileOptions: FileOptions(
-          contentType: 'image/$fileExt',
+          contentType: contentType,
           upsert: true,
         ),
       );
@@ -131,7 +128,7 @@ class ProductsRepository {
           
       return publicUrl;
     } catch (e) {
-      throw Exception('Error en Storage de Supabase: $e');
+      throw Exception('Error en Storage: $e');
     }
   }
 
