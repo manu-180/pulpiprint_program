@@ -1,19 +1,30 @@
+// lib/features/products/domain/category_model.dart
+
 class Category {
   final int id;
   final String name;
+  final int? parentId; // Nuevo: Soporte para subcategorías
 
-  Category({required this.id, required this.name});
+  Category({
+    required this.id, 
+    required this.name,
+    this.parentId,
+  });
 
   factory Category.fromJson(Map<String, dynamic> json) {
     return Category(
       id: json['id'] as int,
       name: json['name'] as String,
+      parentId: json['parent_id'] as int?,
     );
   }
 
-  Map<String, dynamic> toJson() => {'id': id, 'name': name};
+  Map<String, dynamic> toJson() => {
+    'id': id, 
+    'name': name,
+    'parent_id': parentId,
+  };
   
-  // Para comparaciones (dropdowns)
   @override
   bool operator ==(Object other) => other is Category && other.id == id;
   @override

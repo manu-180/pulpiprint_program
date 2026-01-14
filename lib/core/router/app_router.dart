@@ -2,18 +2,18 @@
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:supabase_flutter/supabase_flutter.dart'; // Importante
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/products/presentation/screens/products_screen.dart';
 import '../../features/products/presentation/screens/product_form_screen.dart';
+import '../../features/products/presentation/screens/reorder_products_screen.dart'; // Import nuevo
 
 final appRouterProvider = Provider<GoRouter>((ref) {
-  // Verificamos si ya existe una sesión guardada al iniciar la app
   final session = Supabase.instance.client.auth.currentSession;
   final initialRoute = session != null ? '/' : '/login';
 
   return GoRouter(
-    initialLocation: initialRoute, // <-- AQUÍ ESTÁ LA MAGIA DE LA PERSISTENCIA
+    initialLocation: initialRoute,
     routes: [
       GoRoute(
         path: '/login',
@@ -23,6 +23,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/',
         builder: (context, state) => const ProductsScreen(),
         routes: [
+          // Ruta para reordenar
+          GoRoute(
+            path: 'reorder',
+            builder: (context, state) => const ReorderProductsScreen(),
+          ),
           GoRoute(
             path: 'product/:id',
             builder: (context, state) {

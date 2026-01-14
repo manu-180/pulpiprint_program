@@ -46,9 +46,8 @@ class ProductsScreen extends ConsumerWidget {
     }
   }
 
-  // NUEVO: Función de Logout
+  // Función de Logout
   Future<void> _logout(BuildContext context, WidgetRef ref) async {
-    // Diálogo de confirmación profesional
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -68,10 +67,7 @@ class ProductsScreen extends ConsumerWidget {
     );
 
     if (confirm == true) {
-      // 1. Llamamos al método de logout de Supabase
       await ref.read(loginControllerProvider.notifier).logout();
-      
-      // 2. Redirigimos al Login manualmente
       if (context.mounted) {
         context.go('/login');
       }
@@ -87,11 +83,12 @@ class ProductsScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Inventario PulpiPrint', style: TextStyle(fontWeight: FontWeight.bold)),
         actions: [
-          // 1. CAMBIAR TEMA
+          // 1. CAMBIAR TEMA (CORREGIDO)
           IconButton(
             icon: Icon(isDarkMode ? LucideIcons.sun : LucideIcons.moon),
             onPressed: () {
-              ref.read(isDarkModeProvider.notifier).update((state) => !state);
+              // USAMOS .toggle() EN LUGAR DE .update()
+              ref.read(isDarkModeProvider.notifier).toggle();
             },
             tooltip: 'Cambiar Tema',
           ),
@@ -99,16 +96,18 @@ class ProductsScreen extends ConsumerWidget {
           const SizedBox(width: 4),
 
           // 2. REFRESCAR
+       // lib/features/products/presentation/screens/products_screen.dart (Fragmento del AppBar)
+// ... dentro de los actions del AppBar
           IconButton(
-            icon: const Icon(LucideIcons.refreshCcw),
-            onPressed: () => ref.read(productsProvider.notifier).refresh(),
-            tooltip: 'Recargar lista',
+            icon: const Icon(LucideIcons.listOrdered),
+            onPressed: () => context.go('/reorder'),
+            tooltip: 'Reordenar Catálogo',
           ),
+// ...
 
           const SizedBox(width: 4),
           
-          // 3. LOGOUT (NUEVO)
-          // Usamos un color rojo suave o gris para diferenciarlo
+          // 3. LOGOUT
           IconButton(
             icon: const Icon(LucideIcons.logOut),
             color: Colors.red.shade300, 
@@ -154,7 +153,6 @@ class ProductsScreen extends ConsumerWidget {
             );
           }
 
-          // LISTA DE RENGLONES
           return ListView.builder(
             padding: const EdgeInsets.all(16.0),
             itemCount: products.length,

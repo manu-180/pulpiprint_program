@@ -3,25 +3,27 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // IMPORTANTE
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:window_manager/window_manager.dart'; 
 import 'core/router/app_router.dart';
 import 'core/providers/theme_provider.dart';
-
-import 'package:window_manager/window_manager.dart'; 
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: ".env");
 
-  // Inicializar Supabase
+  // 1. Inicializar Supabase
   await Supabase.initialize(
     url: dotenv.env['SUPABASE_URL'] ?? '',
     anonKey: dotenv.env['SUPABASE_ANON_KEY'] ?? '',
   );
 
-  // --- CONFIGURACIÓN DE VENTANA (NUEVO) ---
-  await windowManager.ensureInitialized();
+  // 2. Inicializar Preferencias (Persistencia local)
+  final prefs = await SharedPreferences.getInstance();
 
+  // 3. Configuración de Ventana
+  await windowManager.ensureInitialized();
   WindowOptions windowOptions = const WindowOptions(
     size: Size(1200, 800), 
     minimumSize: Size(600, 600), 
@@ -33,9 +35,15 @@ Future<void> main() async {
     await windowManager.show();
     await windowManager.focus();
   });
-  // ------------------------------------------
 
-  runApp(const ProviderScope(child: MainApp()));
+  // 4. Inyección de Dependencias (Override)
+  // Aquí "sobreescribimos" el provider vacío con la instancia real de prefs
+  runApp(ProviderScope(
+    overrides: [
+      sharedPreferencesProvider.overrideWithValue(prefs),
+    ],
+    child: const MainApp(),
+  ));
 }
 
 class MainApp extends ConsumerWidget {
@@ -44,6 +52,8 @@ class MainApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(appRouterProvider);
+    
+    // Ahora esto lee de memoria y no falla
     final isDarkMode = ref.watch(isDarkModeProvider);
 
     return MaterialApp.router(
@@ -99,16 +109,6 @@ class MainApp extends ConsumerWidget {
             borderSide: const BorderSide(color: Color(0xFF9D4EDD), width: 2)
           ),
         ),
-        
-        // --- BLOQUE CONFLICTIVO COMENTADO ---
-        // Al quitar esto, Flutter usará el estilo por defecto de Material 3 
-        // que ya es oscuro y redondeado, así que se verá bien igual.
-        /* dialogTheme: DialogTheme(
-          backgroundColor: const Color(0xFF1E1E1E),
-          surfaceTintColor: Colors.transparent,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        ), 
-        */
       ),
       
       themeMode: isDarkMode ? ThemeMode.dark : ThemeMode.light,

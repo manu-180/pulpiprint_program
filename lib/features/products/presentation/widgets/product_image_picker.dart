@@ -1,145 +1,177 @@
 // lib/features/products/presentation/widgets/product_image_picker.dart
 
+import 'dart:io';
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import '../../data/products_repository.dart';
 import '../providers/product_providers.dart';
 
 class ProductImagePicker extends ConsumerStatefulWidget {
-  final TextEditingController urlController;
+  final List<String> images;
+  final ValueChanged<List<String>> onImagesChanged;
 
-  const ProductImagePicker({super.key, required this.urlController});
+  const ProductImagePicker({super.key, required this.images, required this.onImagesChanged});
 
   @override
   ConsumerState<ProductImagePicker> createState() => _ProductImagePickerState();
 }
 
 class _ProductImagePickerState extends ConsumerState<ProductImagePicker> {
+  bool _isDragging = false;
   bool _isUploading = false;
-  final ImagePicker _picker = ImagePicker();
 
-  Future<void> _pickAndUpload() async {
-    try {
-      final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
-      if (image == null) return;
+ // lib/features/products/presentation/widgets/product_image_picker.dart
 
-      setState(() => _isUploading = true);
-      final repository = ref.read(productsRepositoryProvider);
-      
-      // Subida real a Supabase
-      final publicUrl = await repository.uploadImage(image);
-
-      widget.urlController.text = publicUrl;
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Imagen cargada'), backgroundColor: Colors.green, duration: Duration(seconds: 1)),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
-      }
-    } finally {
-      if (mounted) setState(() => _isUploading = false);
+Future<void> _handleFiles(List<dynamic> files) async {
+  if (files.isEmpty) return;
+  
+  setState(() => _isUploading = true);
+  try {
+    final repo = ref.read(productsRepositoryProvider);
+    List<String> newUrls = [];
+    
+    for (var file in files) {
+      final xFile = file is XFile ? file : XFile(file.path);
+      final url = await repo.uploadImage(xFile); // Sube al bucket product_images/uploads
+      newUrls.add(url);
     }
+    
+    // IMPORTANTE: Mantiene las imágenes previas y agrega las nuevas
+    widget.onImagesChanged([...widget.images, ...newUrls]);
+  } finally {
+    if (mounted) setState(() => _isUploading = false);
   }
+}
 
- @override
+  @override
   Widget build(BuildContext context) {
-    final currentUrl = widget.urlController.text;
-    final hasImage = currentUrl.isNotEmpty;
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final primaryColor = theme.colorScheme.primary;
 
-    // Colores dinámicos según el tema
-    final containerColor = isDark ? const Color(0xFF252525) : Colors.white;
-    final borderColor = isDark ? Colors.white12 : Colors.grey.shade300;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text('Multimedia', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-        const SizedBox(height: 12),
-        
-        Container(
-          height: 140, 
-          decoration: BoxDecoration(
-            color: containerColor, // SE ADAPTA AL TEMA
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: borderColor),
-            // Sombra suave solo en modo claro, en oscuro la quitamos o hacemos muy sutil
-            boxShadow: isDark ? [] : [
-              BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))
-            ],
-          ),
-          child: Row(
+    return DropTarget(
+      onDragEntered: (_) => setState(() => _isDragging = true),
+      onDragExited: (_) => setState(() => _isDragging = false),
+      // CORRECCIÓN: 'onDone' reemplaza a 'onPerformDrop' en versiones actuales
+      onDragDone: (details) => _handleFiles(details.files),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Galería Multimedia', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
             children: [
-              // 1. PREVIEW
-              AspectRatio(
-                aspectRatio: 1.0,
-                child: Container(
-                  margin: const EdgeInsets.all(8),
+              // Botón de Carga / Zona de Drop
+              InkWell(
+                onTap: _isUploading ? null : () async {
+                  final files = await ImagePicker().pickMultiImage();
+                  if (files.isNotEmpty) _handleFiles(files);
+                },
+                borderRadius: BorderRadius.circular(16),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  width: 110,
+                  height: 110,
                   decoration: BoxDecoration(
-                    color: isDark ? Colors.black26 : Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(8),
-                    image: hasImage 
-                      ? DecorationImage(image: NetworkImage(currentUrl), fit: BoxFit.cover) 
-                      : null,
+                    color: _isDragging 
+                        ? primaryColor.withOpacity(0.1) 
+                        : (isDark ? Colors.white.withOpacity(0.05) : Colors.grey.shade50),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: _isDragging ? primaryColor : (isDark ? Colors.white10 : Colors.grey.shade300),
+                      width: _isDragging ? 2 : 1,
+                      style: BorderStyle.solid,
+                    ),
                   ),
-                  child: hasImage 
-                      ? null 
-                      : Icon(LucideIcons.image, color: theme.disabledColor, size: 32),
+                  child: _isUploading 
+                    ? const Center(child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)))
+                    : Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            _isDragging ? LucideIcons.filePlus : LucideIcons.uploadCloud, 
+                            color: _isDragging ? primaryColor : Colors.grey
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            _isDragging ? '¡Suelta!' : 'Subir o Arrastrar', 
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 10, 
+                              fontWeight: FontWeight.w600,
+                              color: _isDragging ? primaryColor : Colors.grey
+                            )
+                          ),
+                        ],
+                      ),
                 ),
               ),
 
-              // 2. ACCIONES
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (_isUploading) ...[
-                        const LinearProgressIndicator(),
-                        const SizedBox(height: 8),
-                        Text('Subiendo...', style: TextStyle(fontSize: 12, color: theme.hintColor)),
-                      ] else ...[
-                        Text(
-                          hasImage ? 'Imagen lista' : 'Sin imagen',
-                          style: const TextStyle(fontWeight: FontWeight.bold),
+              // Lista de Imágenes existentes
+              ...widget.images.asMap().entries.map((entry) {
+                final index = entry.key;
+                final url = entry.value;
+                return Stack(
+                  children: [
+                    Container(
+                      width: 110,
+                      height: 110,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade200),
+                        image: DecorationImage(image: NetworkImage(url), fit: BoxFit.cover),
+                      ),
+                    ),
+                    Positioned(
+                      top: 4,
+                      right: 4,
+                      child: GestureDetector(
+                        onTap: () {
+                          final newList = List<String>.from(widget.images)..removeAt(index);
+                          widget.onImagesChanged(newList);
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
+                          child: const Icon(LucideIcons.x, size: 14, color: Colors.white),
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          hasImage ? 'Se ve genial.' : 'Sube una foto (Max 5MB).',
-                          style: TextStyle(fontSize: 12, color: theme.hintColor),
-                        ),
-                        const Spacer(),
-                        SizedBox(
-                          width: double.infinity,
-                          child: OutlinedButton.icon(
-                            onPressed: _pickAndUpload,
-                            icon: Icon(hasImage ? LucideIcons.refreshCw : LucideIcons.uploadCloud, size: 16),
-                            label: Text(hasImage ? 'Cambiar' : 'Subir'),
-                            style: OutlinedButton.styleFrom(
-                              // En modo oscuro, el borde del botón más sutil
-                              side: BorderSide(color: isDark ? Colors.white24 : theme.primaryColor.withOpacity(0.5)),
-                              foregroundColor: theme.colorScheme.primary,
-                            ),
+                      ),
+                    ),
+                    if (index == 0)
+                      Positioned(
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          decoration: const BoxDecoration(
+                            color: Colors.black54,
+                            borderRadius: BorderRadius.vertical(bottom: Radius.circular(15)),
+                          ),
+                          child: const Text(
+                            'PORTADA',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
                           ),
                         ),
-                      ]
-                    ],
-                  ),
-                ),
-              ),
+                      ),
+                  ],
+                );
+              }),
             ],
           ),
-        ),
-      ],
+          const SizedBox(height: 8),
+          if (widget.images.isNotEmpty)
+            const Text(
+              'Tip: La primera imagen se usará como portada principal.',
+              style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: Colors.grey),
+            ),
+        ],
+      ),
     );
   }
 }
